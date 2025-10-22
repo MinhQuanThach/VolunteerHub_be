@@ -1,0 +1,185 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  VOLUNTEER     @map("volunteer")
+  EVENT_MANAGER @map("event_manager")
+  ADMIN         @map("admin")
+}
+
+enum UserStatus {
+  ACTIVE @map("active")
+  LOCKED @map("locked")
+}
+
+enum EventStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+  COMPLETED @map("completed")
+}
+
+enum RegistrationStatus {
+  PENDING    @map("pending")
+  REJECTED   @map("rejected")
+  REGISTERED @map("registered")
+}
+
+enum NotificationType {
+  REGISTRATION @map("registration")
+  COMPLETION   @map("completion")
+  SYSTEM       @map("system")
+}
+
+enum PostMediaType {
+  IMAGE @map("image")
+  VIDEO @map("video")
+}
+
+model Users {
+  id         Int        @id @default(autoincrement())
+  name       String
+  email      String     @unique
+  password   String
+  role       Role       @default(VOLUNTEER)
+  status     UserStatus @default(ACTIVE)
+  created_at DateTime   @default(now())
+
+  // relations
+  events_created  Events[]              @relation("events_created_by")
+  events_approved Events[]              @relation("events_approved_by")
+  registrations   Event_registrations[]
+  notifications   Notifications[]
+  posts           Posts[]
+  comments        Comments[]
+  likes           Likes[]
+
+  @@map("Users")
+}
+
+model Events {
+  id               Int         @id @default(autoincrement())
+  title            String
+  description      String?
+  category         String?
+  location         String
+  start_date       DateTime
+  end_date         DateTime
+  max_participants Int?
+  created_by       Int?
+  approved_by      Int?
+  status           EventStatus @default(PENDING)
+  created_at       DateTime    @default(now())
+
+  // relations
+  creator       Users?                @relation("events_created_by", fields: [created_by], references: [id], onDelete: SetNull)
+  approver      Users?                @relation("events_approved_by", fields: [approved_by], references: [id], onDelete: SetNull)
+  registrations Event_registrations[]
+  notifications Notifications[]
+  posts         Posts[]
+
+  @@map("Events")
+}
+
+model Event_registrations {
+  id            Int                @id @default(autoincrement())
+  user_id       Int
+  event_id      Int
+  status        RegistrationStatus @default(PENDING)
+  completed     Boolean            @default(false)
+  registered_at DateTime           @default(now())
+  canceled_at   DateTime?
+
+  // relations
+  user  Users  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event Events @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("Event_registrations")
+}
+
+model Notifications {
+  id         Int              @id @default(autoincrement())
+  user_id    Int
+  event_id   Int?
+  message    String
+  type       NotificationType @default(SYSTEM)
+  is_read    Boolean          @default(false)
+  created_at DateTime         @default(now())
+
+  // relations
+  user  Users   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event Events? @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("Notifications")
+}
+
+model Posts {
+  id         Int      @id @default(autoincrement())
+  event_id   Int
+  user_id    Int
+  content    String
+  created_at DateTime @default(now())
+
+  // relations
+  event    Events       @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  author   Users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  comments Comments[]
+  likes    Likes[]
+  media    Post_media[]
+
+  @@map("Posts")
+}
+
+model Comments {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  user_id    Int
+  content    String   @db.Text
+  created_at DateTime @default(now())
+
+  // relations
+  post Posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user Users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("Comments")
+}
+
+model Likes {
+  id         Int      @id @default(autoincrement())
+  post_id    Int
+  user_id    Int
+  created_at DateTime @default(now())
+
+  // relations
+  post Posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user Users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([post_id, user_id], name: "likes_index_0")
+  @@map("Likes")
+}
+
+model Post_media {
+  id         Int           @id @default(autoincrement())
+  post_id    Int
+  file_url   String?
+  file_type  PostMediaType @default(IMAGE)
+  created_at DateTime      @default(now())
+
+  // relations
+  post Posts @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@map("Post_media")
+}
